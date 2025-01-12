@@ -16,21 +16,21 @@ type SensorConfig struct {
 	PointNAveraged  uint32 // Number of points to average for point measurement. Max 4.29 billion
 	PointDelayUs    uint32 // Microseconds between averaged point measurements. Max 72 minutes
 	PointIntervalMs uint32 // Milliseconds between point measurements. Max 49 days
-	_               uint32 // Reserved
+	PointReserved0  uint32 // Reserved
 	BurstNSamples   uint32 // Number of points to collect in a burst. Max 4.29 billion
 	BurstDelayUs    uint32 // Microseconds between burst measurements. Max 72 minutes
 	BurstIntervalMs uint32 // Milliseconds between burst measurements. Max 49 days
-	_               uint32 // Reserved
+	BurstReserved0  uint32 // Reserved
 	Expiration      uint32 // Seconds until this config expires. Max. very long
 }
 
 var DefaultConfig = SensorConfig{
-	PointNAveraged:  16,
+	PointNAveraged:  64,
 	PointDelayUs:    0,
 	PointIntervalMs: 1000 * 1,
 
-	BurstNSamples:   256,
-	BurstDelayUs:    0,
+	BurstNSamples:   512,
+	BurstDelayUs:    100,
 	BurstIntervalMs: 10000 * 1,
 
 	Expiration: 10,
@@ -61,11 +61,8 @@ func runServer(ctx context.Context, serverLogger *slog.Logger) error {
 
 		// Read body
 		body := make([]byte, 2)
-		if n, err := r.Body.Read(body); err != nil {
-			logger.ErrorContext(ctx, "reading body", "err", err)
-			return
-		} else if n != 2 {
-			logger.ErrorContext(ctx, "wrong body size", "size", n)
+		if n, err := r.Body.Read(body); n != 2 {
+			logger.ErrorContext(ctx, "wrong body size", "err", err, "size", n)
 			return
 		}
 
@@ -73,7 +70,7 @@ func runServer(ctx context.Context, serverLogger *slog.Logger) error {
 		measurement := binary.BigEndian.Uint16(body)
 
 		// Emit
-		logger.InfoContext(ctx, "point measurement", "measurement", measurement, "body", body)
+		logger.InfoContext(ctx, "point measurement", "measurement", measurement)
 	})
 
 	router.HandleFunc("POST /burst/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +109,7 @@ func runServer(ctx context.Context, serverLogger *slog.Logger) error {
 	})
 
 	router.HandleFunc("GET /config/{id}", func(w http.ResponseWriter, r *http.Request) {
-		logger := serverLogger.With("endpoint", "POST /burst/{id}")
+		logger := serverLogger.With("endpoint", "GET /config/{id}")
 
 		// Get ID
 		id := r.PathValue("id")
@@ -133,7 +130,7 @@ func runServer(ctx context.Context, serverLogger *slog.Logger) error {
 	})
 
 	srv := &http.Server{
-		Addr:           ":8080",
+		Addr:           ":8090",
 		Handler:        router,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
